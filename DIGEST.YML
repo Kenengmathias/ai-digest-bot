@@ -1,0 +1,35 @@
+name: AI Digest
+
+on:
+  schedule:
+    - cron: "0 7,19 * * *"   # 08:00 & 20:00 WAT (UTC+1) — edit to your hours, times are UTC
+  workflow_dispatch: {}       # lets you trigger a run manually from the Actions tab
+
+permissions:
+  contents: write            # needed to commit seen.json back
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - run: pip install -r requirements.txt
+
+      - name: Run digest
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID: ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python ai_digest.py
+
+      - name: Persist seen-items state
+        run: |
+          git config user.name "ai-digest-bot"
+          git config user.email "actions@users.noreply.github.com"
+          git add seen.json
+          git diff --cached --quiet || git commit -m "chore: update seen items"
+          git push
