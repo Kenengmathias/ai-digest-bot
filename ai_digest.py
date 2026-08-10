@@ -25,8 +25,8 @@ TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 # Free-tier model IDs on OpenRouter rotate — check openrouter.ai/models?fmt=free if this stops working
-# and override via the OPENROUTER_MODEL secret/env var rather than editing this file.
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
+# and override via the OPENROUTER_MODEL secret rather than editing this file.
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free"
 
 
 def load_seen():
@@ -108,6 +108,8 @@ def summarize_items(items):
             json={"model": OPENROUTER_MODEL, "messages": [{"role": "user", "content": prompt}]},
             timeout=60,
         )
+        if resp.status_code != 200:
+            print(f"OpenRouter error {resp.status_code}: {resp.text[:500]}")
         resp.raise_for_status()
         content = resp.json()["choices"][0]["message"]["content"].strip()
         content = content.strip("`").removeprefix("json").strip()
