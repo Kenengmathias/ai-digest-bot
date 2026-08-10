@@ -19,7 +19,7 @@ RSS_FEEDS = {
     "MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
     "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
 }
-LOOKBACK_HOURS = 24
+LOOKBACK_HOURS = 72  # covers arXiv's weekend announcement gap; seen.json already blocks repeats
 STATE_FILE = Path(__file__).parent / "seen.json"  # tracked + committed by the workflow
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
