@@ -1,4 +1,4 @@
-openai/gpt-oss-20b:free#!/usr/bin/env python3
+#!/usr/bin/env python3
 """
 AI/Tech Digest — fetches recent arXiv papers + tech news RSS, sends via Telegram.
 Runs on a schedule via GitHub Actions (see .github/workflows/digest.yml).
