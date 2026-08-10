@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+openai/gpt-oss-20b:free#!/usr/bin/env python3
 """
 AI/Tech Digest — fetches recent arXiv papers + tech news RSS, sends via Telegram.
 Runs on a schedule via GitHub Actions (see .github/workflows/digest.yml).
@@ -14,7 +14,7 @@ import feedparser
 
 # ---- Config ----
 ARXIV_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"]
-ARXIV_MAX_RESULTS = 15
+ARXIV_MAX_RESULTS = 10
 RSS_FEEDS = {
     "MIT Tech Review AI": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
     "TechCrunch AI": "https://techcrunch.com/category/artificial-intelligence/feed/",
@@ -26,7 +26,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 # Free-tier model IDs on OpenRouter rotate — check openrouter.ai/models?fmt=free if this stops working
 # and override via the OPENROUTER_MODEL secret rather than editing this file.
-OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free"
+OPENROUTER_MODEL = [os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free"] 
 
 
 def load_seen():
