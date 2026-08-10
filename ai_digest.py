@@ -26,7 +26,7 @@ TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
 # Free-tier model IDs on OpenRouter rotate — check openrouter.ai/models?fmt=free if this stops working
 # and override via the OPENROUTER_MODEL secret rather than editing this file.
-OPENROUTER_MODEL = [os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free", "openai/gpt-oss-20b:free"] 
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free" 
 
 
 def load_seen():
@@ -84,10 +84,9 @@ def fetch_rss():
 
 
 def summarize_items(items):
-    """One batched OpenRouter call for all items (not one call per item — keeps free-tier
-    usage to ~2 requests/day regardless of how many papers/articles came in). Returns a
-    list of plain-English one-liners aligned to `items`; empty strings on any failure so
-    a bad/missing key never breaks the digest."""
+    """One batched OpenRouter call for all items. Returns a list of plain-English 
+    one-liners aligned to `items`; empty strings on any failure so a bad/missing 
+    key never breaks the digest."""
     if not OPENROUTER_API_KEY or not items:
         return ["" for _ in items]
 
@@ -98,28 +97,59 @@ def summarize_items(items):
     prompt = (
         "For each numbered AI/tech item below, write ONE short, plain-English sentence "
         "(under 25 words) explaining what it is and why a non-technical reader might care. "
-        "Reply with ONLY a JSON array of strings, same order as the input, nothing else "
-        "(no markdown fences, no commentary).\n\n" + numbered
+        "Reply with ONLY a valid raw JSON array of strings, same order as the input, nothing else. "
+        "Do NOT wrap the output in markdown code blocks or backticks.\n\n" + numbered
     )
     try:
+        # Using OpenRouter's plural 'models' feature so it auto-swaps if one fails!
+        payload = {
+            "models": [
+                OPENROUTER_MODEL, 
+                "openai/gpt-oss-20b:free"
+            ],
+            "messages": [{"role": "user", "content": prompt}],
+            "response_format": {"type": "json_object"}  # Forces JSON generation
+        }
+
         resp = requests.post(
             "https://openrouter.ai/api/v1/chat/completions",
             headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
-            json={"model": OPENROUTER_MODEL, "messages": [{"role": "user", "content": prompt}]},
+            json=payload,
             timeout=60,
         )
         if resp.status_code != 200:
             print(f"OpenRouter error {resp.status_code}: {resp.text[:500]}")
         resp.raise_for_status()
+        
         content = resp.json()["choices"][0]["message"]["content"].strip()
-        content = content.strip("`").removeprefix("json").strip()
+        
+        # Robust Markdown stripping logic
+        if content.startswith("```"):
+            # Split lines, remove the first line (```json) and last line (```)
+            lines = content.splitlines()
+            if lines[0].startswith("```"):
+                lines = lines[1:]
+            if lines and lines[-1].startswith("```"):
+                lines = lines[:-1]
+            content = "\n".join(lines).strip()
+            
         summaries = json.loads(content)
+        
+        # If the model wrapped the array in a parent object dictionary
+        if isinstance(summaries, dict):
+            for key in summaries.keys():
+                if isinstance(summaries[key], list):
+                    summaries = summaries[key]
+                    break
+
         if not isinstance(summaries, list) or len(summaries) != len(items):
             raise ValueError(f"expected {len(items)} summaries, got {summaries!r}")
         return [str(s) for s in summaries]
+        
     except Exception as e:
-        print(f"Summarization skipped ({e})")
+        print(f"Summarization skipped due to error: ({e})")
         return ["" for _ in items]
+
 
 
 def send_telegram(text):
