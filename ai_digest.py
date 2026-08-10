@@ -79,11 +79,14 @@ def send_telegram(text):
         return
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
     for i in range(0, len(text), 4000):  # Telegram's 4096-char message cap
-        requests.post(url, data={
+        resp = requests.post(url, data={
             "chat_id": TELEGRAM_CHAT_ID,
             "text": text[i:i + 4000],
             "disable_web_page_preview": True,
         }, timeout=20)
+        if resp.status_code != 200:
+            print(f"Telegram send failed: {resp.status_code} {resp.text}")
+        resp.raise_for_status()  # stop here on failure — don't let main() mark items as seen
 
 
 def build_digest(papers, articles, seen):
@@ -121,4 +124,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
