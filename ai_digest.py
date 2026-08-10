@@ -23,6 +23,10 @@ LOOKBACK_HOURS = 72  # covers arXiv's weekend announcement gap; seen.json alread
 STATE_FILE = Path(__file__).parent / "seen.json"  # tracked + committed by the workflow
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
+# Free-tier model IDs on OpenRouter rotate — check openrouter.ai/models?fmt=free if this stops working
+# and override via the OPENROUTER_MODEL secret/env var rather than editing this file.
+OPENROUTER_MODEL = os.environ.get("OPENROUTER_MODEL", "meta-llama/llama-3.3-70b-instruct:free")
 
 
 def load_seen():
@@ -54,6 +58,7 @@ def fetch_arxiv():
             "id": entry.id,
             "title": " ".join(entry.title.split()),
             "link": entry.link,
+            "blurb": " ".join(entry.summary.split())[:600] if getattr(entry, "summary", None) else "",
         })
     return papers
 
@@ -68,8 +73,51 @@ def fetch_rss():
                 published = datetime(*entry.published_parsed[:6], tzinfo=timezone.utc)
                 if published < cutoff:
                     continue
-            items.append({"id": entry.link, "title": entry.title, "link": entry.link, "source": source})
+            items.append({
+                "id": entry.link,
+                "title": entry.title,
+                "link": entry.link,
+                "source": source,
+                "blurb": " ".join(entry.summary.split())[:400] if getattr(entry, "summary", None) else "",
+            })
     return items
+
+
+def summarize_items(items):
+    """One batched OpenRouter call for all items (not one call per item — keeps free-tier
+    usage to ~2 requests/day regardless of how many papers/articles came in). Returns a
+    list of plain-English one-liners aligned to `items`; empty strings on any failure so
+    a bad/missing key never breaks the digest."""
+    if not OPENROUTER_API_KEY or not items:
+        return ["" for _ in items]
+
+    numbered = "\n".join(
+        f"{i+1}. {it['title']}" + (f" — {it['blurb']}" if it.get("blurb") else "")
+        for i, it in enumerate(items)
+    )
+    prompt = (
+        "For each numbered AI/tech item below, write ONE short, plain-English sentence "
+        "(under 25 words) explaining what it is and why a non-technical reader might care. "
+        "Reply with ONLY a JSON array of strings, same order as the input, nothing else "
+        "(no markdown fences, no commentary).\n\n" + numbered
+    )
+    try:
+        resp = requests.post(
+            "https://openrouter.ai/api/v1/chat/completions",
+            headers={"Authorization": f"Bearer {OPENROUTER_API_KEY}"},
+            json={"model": OPENROUTER_MODEL, "messages": [{"role": "user", "content": prompt}]},
+            timeout=60,
+        )
+        resp.raise_for_status()
+        content = resp.json()["choices"][0]["message"]["content"].strip()
+        content = content.strip("`").removeprefix("json").strip()
+        summaries = json.loads(content)
+        if not isinstance(summaries, list) or len(summaries) != len(items):
+            raise ValueError(f"expected {len(items)} summaries, got {summaries!r}")
+        return [str(s) for s in summaries]
+    except Exception as e:
+        print(f"Summarization skipped ({e})")
+        return ["" for _ in items]
 
 
 def send_telegram(text):
@@ -95,17 +143,30 @@ def build_digest(papers, articles, seen):
     if not new_papers and not new_articles:
         return None, seen
 
+    all_new = new_papers + new_articles
+    summaries = summarize_items(all_new)
+    for item, summary in zip(all_new, summaries):
+        item["ai_summary"] = summary
+
     lines = [f"AI/Tech Digest — {datetime.now().strftime('%b %d, %Y')}\n"]
     if new_papers:
         lines.append("── arXiv Papers ──")
         for p in new_papers:
-            lines.append(f"• {p['title']}\n  {p['link']}")
+            entry = f"• {p['title']}"
+            if p["ai_summary"]:
+                entry += f"\n  {p['ai_summary']}"
+            entry += f"\n  {p['link']}"
+            lines.append(entry)
     if new_articles:
         lines.append("\n── Tech News ──")
         for a in new_articles:
-            lines.append(f"• [{a['source']}] {a['title']}\n  {a['link']}")
+            entry = f"• [{a['source']}] {a['title']}"
+            if a["ai_summary"]:
+                entry += f"\n  {a['ai_summary']}"
+            entry += f"\n  {a['link']}"
+            lines.append(entry)
 
-    for item in new_papers + new_articles:
+    for item in all_new:
         seen.add(item["id"])
     return "\n".join(lines), seen
 
