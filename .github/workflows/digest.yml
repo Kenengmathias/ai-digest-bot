@@ -2,7 +2,7 @@ name: AI Digest
 
 on:
   schedule:
-    - cron: "10, 11 * * *"   # 08:00 & 20:00 WAT (UTC+1) — edit to your hours, times are UTC
+    - cron: "0 7,19 * * *"   # 08:00 & 20:00 WAT (UTC+1) — edit to your hours, times are UTC
   workflow_dispatch: {}       # lets you trigger a run manually from the Actions tab
 
 permissions:
