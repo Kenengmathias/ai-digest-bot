@@ -12,6 +12,7 @@ from io import BytesIO
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from pypdf import PdfReader
+from openai import OpenAI
 
 # ---- Config ----
 ARXIV_CATEGORIES = ["cs.AI", "cs.LG", "cs.CL"]
@@ -22,7 +23,7 @@ STATE_FILE = Path(__file__).parent / "seen.json"
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID   = os.environ.get("TELEGRAM_CHAT_ID")
 OPENROUTER_API_KEY = os.environ.get("OPENROUTER_API_KEY")
-OPENROUTER_MODEL   = os.environ.get("OPENROUTER_MODEL") or "meta-llama/llama-3.3-70b-instruct:free"
+OPENROUTER_MODEL   = "openrouter/free"
 
 ANALYSIS_PROMPT = """
 You are explaining an AI research paper to a smart, self-taught
